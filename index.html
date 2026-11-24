@@ -1,0 +1,172 @@
+﻿<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>特定技能1号 ビルクリーニング 試験対策クイズ②（問16〜30）</title>
+<style>
+  :root { --main:#1d6fb8; --ok:#1f9d55; --ng:#d64545; --bg:#f4f7fb; }
+  * { box-sizing:border-box; }
+  body { font-family:"Meiryo","Hiragino Sans",sans-serif; background:var(--bg); margin:0; color:#222; line-height:1.7; }
+  main { max-width:680px; margin:0 auto; padding:16px; }
+  h1 { font-size:1.3rem; color:var(--main); text-align:center; }
+  .card { background:#fff; border-radius:12px; padding:20px; box-shadow:0 2px 8px rgba(0,0,0,.08); margin-bottom:16px; }
+  label { display:block; margin:12px 0 4px; font-weight:bold; }
+  select { width:100%; padding:10px; font-size:1rem; border-radius:8px; border:1px solid #bbb; }
+  button { font-size:1.05rem; padding:12px 18px; border:none; border-radius:8px; background:var(--main); color:#fff; cursor:pointer; width:100%; margin-top:12px; }
+  button.sub { background:#6b7a8c; }
+  .choice { display:block; width:100%; text-align:left; background:#fff; color:#222; border:2px solid #cfd8e3; margin-top:10px; }
+  .choice:hover:not(:disabled) { border-color:var(--main); }
+  .choice.correct { background:#e6f6ec; border-color:var(--ok); }
+  .choice.wrong { background:#fdeaea; border-color:var(--ng); }
+  .progress { color:#667; font-size:.9rem; }
+  .bar { height:8px; background:#dde5ee; border-radius:4px; overflow:hidden; margin:6px 0 14px; }
+  .bar > div { height:100%; background:var(--main); width:0; transition:width .3s; }
+  .q { font-size:1.15rem; font-weight:bold; }
+  .result { margin-top:14px; padding:12px; border-radius:8px; }
+  .result.ok { background:#e6f6ec; } .result.ng { background:#fdeaea; }
+  .score { font-size:2.2rem; text-align:center; color:var(--main); font-weight:bold; }
+  .hidden { display:none; }
+  .review li { margin-bottom:10px; }
+  .tag { display:inline-block; font-size:.75rem; background:#e3edf8; color:var(--main); padding:1px 8px; border-radius:10px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>特定技能1号 ビルクリーニング 試験対策クイズ②（問16〜30）</h1>
+
+  <!-- スタート画面 -->
+  <section id="start" class="card">
+    <label for="field">分野</label>
+    <select id="field"></select>
+    <label for="count">問題数</label>
+    <select id="count">
+      <option value="5">5問</option>
+      <option value="10">10問</option>
+      <option value="all" selected>すべて</option>
+    </select>
+    <button id="startBtn">スタート</button>
+    <button id="retryWrongBtn" class="sub">前に間違えた問題だけ練習する</button>
+    <p class="progress" id="stats"></p>
+  </section>
+
+  <!-- 出題画面 -->
+  <section id="quiz" class="card hidden">
+    <div class="progress" id="progress"></div>
+    <div class="bar"><div id="barFill"></div></div>
+    <span class="tag" id="qField"></span>
+    <p class="q" id="qText"></p>
+    <div id="choices"></div>
+    <div id="result" class="result hidden"></div>
+    <button id="nextBtn" class="hidden">次へ</button>
+  </section>
+
+  <!-- 結果画面 -->
+  <section id="end" class="card hidden">
+    <div class="score" id="score"></div>
+    <p id="scoreMsg" style="text-align:center"></p>
+    <h3>間違えた問題</h3>
+    <ol class="review" id="review"></ol>
+    <button id="againBtn">もう一度</button>
+  </section>
+</main>
+
+<script src="questions.js" charset="utf-8"></script>
+<script>
+const $ = id => document.getElementById(id);
+const KEY = "tokutei-quiz-bc2-wrong";
+let list = [], idx = 0, correct = 0, wrongs = [], answered = false;
+
+const loadWrong = () => JSON.parse(localStorage.getItem(KEY) || "[]");   // 問題文の配列
+const saveWrong = a => localStorage.setItem(KEY, JSON.stringify(a));
+
+const fields = [...new Set(QUESTIONS.map(q => q.field))];
+$("field").innerHTML = '<option value="all">すべての分野</option>' +
+  fields.map(f => `<option>${f}</option>`).join("");
+
+function show(id) {
+  ["start", "quiz", "end"].forEach(s => $(s).classList.toggle("hidden", s !== id));
+}
+function shuffle(a) {
+  a = [...a];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+function updateStats() {
+  const n = loadWrong().length;
+  $("stats").textContent = `登録されている問題: ${QUESTIONS.length}問 ／ 間違えた問題: ${n}問`;
+  $("retryWrongBtn").classList.toggle("hidden", n === 0);
+}
+
+function begin(pool) {
+  if (!pool.length) return;
+  list = pool; idx = 0; correct = 0; wrongs = [];
+  show("quiz"); render();
+}
+function render() {
+  const q = list[idx];
+  answered = false;
+  $("progress").textContent = `第${idx + 1}問 / ${list.length}問`;
+  $("barFill").style.width = (idx / list.length * 100) + "%";
+  $("qField").textContent = q.field;
+  $("qText").textContent = q.q;
+  $("result").classList.add("hidden");
+  $("nextBtn").classList.add("hidden");
+  $("choices").innerHTML = "";
+  q.order.forEach(origIdx => {
+    const b = document.createElement("button");
+    b.className = "choice";
+    b.textContent = q.choices[origIdx];
+    b.onclick = () => answer(origIdx, b);
+    $("choices").appendChild(b);
+  });
+}
+function answer(chosen, btn) {
+  if (answered) return;
+  answered = true;
+  const q = list[idx];
+  const ok = chosen === q.answer;
+  [...$("choices").children].forEach((b, i) => {
+    b.disabled = true;
+    if (q.order[i] === q.answer) b.classList.add("correct");
+  });
+  if (!ok) btn.classList.add("wrong");
+  const w = loadWrong();
+  if (ok) { correct++; saveWrong(w.filter(t => t !== q.q)); }
+  else { wrongs.push(q); if (!w.includes(q.q)) { w.push(q.q); saveWrong(w); } }
+  const r = $("result");
+  r.className = "result " + (ok ? "ok" : "ng");
+  r.innerHTML = `<b>${ok ? "⭕ 正解！" : "❌ 不正解"}</b><br>${q.explanation}`;
+  $("nextBtn").textContent = idx + 1 < list.length ? "次へ" : "結果を見る";
+  $("nextBtn").classList.remove("hidden");
+}
+function finish() {
+  show("end");
+  const pct = Math.round(correct / list.length * 100);
+  $("score").textContent = `${correct} / ${list.length}（${pct}%）`;
+  $("scoreMsg").textContent = pct >= 80 ? "よくできました！" : pct >= 60 ? "あと少し！復習しましょう。" : "間違えた問題をもう一度確認しましょう。";
+  $("review").innerHTML = wrongs.length
+    ? wrongs.map(q => `<li><b>${q.q}</b><br>正解: ${q.choices[q.answer]}<br><small>${q.explanation}</small></li>`).join("")
+    : "<li>全問正解です！</li>";
+}
+
+$("startBtn").onclick = () => {
+  const f = $("field").value, c = $("count").value;
+  let pool = QUESTIONS.filter(q => f === "all" || q.field === f);
+  pool = shuffle(pool);
+  if (c !== "all") pool = pool.slice(0, +c);
+  begin(pool.map(q => ({ ...q, order: shuffle(q.choices.map((_, i) => i)) })));
+};
+$("retryWrongBtn").onclick = () => {
+  const w = loadWrong();
+  begin(shuffle(QUESTIONS.filter(q => w.includes(q.q))).map(q => ({ ...q, order: shuffle(q.choices.map((_, i) => i)) })));
+};
+$("nextBtn").onclick = () => { idx++; idx < list.length ? render() : finish(); };
+$("againBtn").onclick = () => { updateStats(); show("start"); };
+updateStats();
+</script>
+</body>
+</html>
